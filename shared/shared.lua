@@ -1,3 +1,23 @@
+----JOB-----
+
+	["airdealer"] = {
+		label = "Airship Dealer",
+		defaultDuty = true,
+		grades = {
+            ['0'] = {
+                name = "Trainee",
+                payment = 1000
+            },
+			['1'] = {
+                name = "CEO",
+				isboss = true,
+                payment = 10000
+            },
+        },
+	},
+-----Job END----
+
+
 ----AIRCRAFTSHOP----
     ['luxor'] = {
 	['name'] = 'Luxor',
