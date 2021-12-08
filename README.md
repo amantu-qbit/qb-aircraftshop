@@ -1,7 +1,5 @@
 # qb-aircraftshop
 
-# qb-aircraftshop
-
 **Add Job to qb-core/share.lua:**
 Check share folder
 
