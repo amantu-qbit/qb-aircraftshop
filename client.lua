@@ -1,7 +1,13 @@
 -- Variables
+----------
 local QBCore = exports['qb-core']:GetCoreObject()
 local PlayerData = QBCore.Functions.GetPlayerData() -- Just for resource restart (same as event handler)
-local inLAVS = false
+local insideZones = {}
+
+for name, shop in pairs(Config.Shops) do -- foreach shop
+    insideZones[name] = false  -- default to not being in a shop
+end
+
 local testDriveVeh, inTestDrive = 0, false
 local ClosestVehicle, ClosestShop = 1, nil
 local zones = {}
@@ -145,6 +151,16 @@ local function startTestDriveTimer(testDriveTime)
     end)
 end
 
+local function isInShop() 
+    for shopName, isInside in pairs(insideZones) do
+        if isInside then
+            return true
+        end
+    end
+
+    return false
+end
+
 local function createVehZones(ClosestShop) -- This will create an entity zone if config is true that you can use to target and open the vehicle menu
     if not Config.UsingTarget then
         for i = 1, #Config.Shops[ClosestShop]['ShowroomVehicles'] do
@@ -177,7 +193,7 @@ local function createVehZones(ClosestShop) -- This will create an entity zone if
                     icon = "fas fa-car",
                     label = "Vehicle Interaction",
                     canInteract = function(entity)
-                        if (inLAVS) and (Config.Shops[ClosestShop]['Job'] == 'none' or PlayerData.job.name == Config.Shops[ClosestShop]['Job']) then
+                        if (isInShop()) and (Config.Shops[ClosestShop]['Job'] == 'none' or PlayerData.job.name == Config.Shops[ClosestShop]['Job']) then
                             return true
                         end
                         return false
@@ -191,88 +207,152 @@ end
 
 -- Zones
 
----CUSTOM LAVS--
-local LAVS = PolyZone:Create({
-    vector2(-1673.08, -3100.58),
-    vector2(-1676.84, -3106.01),
-    vector2(-1680.66, -3103.83),
-    vector2(-1707.15, -3159.72),
-    vector2(-1647.6, -3194.32),
-    vector2(-1609.24, -3150.01),
-    vector2(-1604.57, -3140.66),
-    vector2(-1673.08, -3100.58),
+function createFreeUseShop(shopShape, name)
+    local zone = PolyZone:Create(shopShape, {  -- create the zone
+        name= name,
+        minZ = shopShape.minZ,
+        maxZ = shopShape.maxZ
+    })
     
+    zone:onPlayerInOut(function(isPointInside)
+        if isPointInside then
+            ClosestShop = name
+            insideZones[name] = true
+            CreateThread(function()
+                while insideZones[name] do
+                    setClosestShowroomVehicle()
+                    vehicleMenu = {
+                        {
+                            isMenuHeader = true,
+                            header = getVehBrand():upper().. ' '..getVehName():upper().. ' - $' ..getVehPrice(),
+                        },
+                        {
+                            header = 'Test Drive',
+                            txt = 'Test drive currently selected vehicle',
+                            params = {
+                                event = 'qb-aircraftshop:client:TestDrive',
+                            }
+                        },
+                        {
+                            header = "Buy Vehicle",
+                            txt = 'Purchase currently selected vehicle',
+                            params = {
+                                isServer = true,
+                                event = 'qb-aircraftshop:server:buyShowroomVehicle',
+                                args = {
+                                    buyVehicle = Config.Shops[ClosestShop]["ShowroomVehicles"][ClosestVehicle].chosenVehicle
+                                }
+                            }
+                        },
+                        {
+                            header = 'Finance Vehicle',
+                            txt = 'Finance currently selected vehicle',
+                            params = {
+                                event = 'qb-aircraftshop:client:openFinance',
+                                args = {
+                                    price = getVehPrice(),
+                                    buyVehicle = Config.Shops[ClosestShop]["ShowroomVehicles"][ClosestVehicle].chosenVehicle
+                                }
+                            }
+                        },
+                        {
+                            header = 'Swap Vehicle',
+                            txt = 'Change currently selected vehicle',
+                            params = {
+                                event = 'qb-aircraftshop:client:vehCategories',
+                            }
+                        },
+                    }
+                    Wait(1000)
+                end
+            end)
+        else
+            insideZones[name] = false -- leave the shops zone
+            ClosestShop = nil
+            ClosestVehicle = nil
+        end
+    end)
+end
 
-
+function createManagedShop(shopShape, name, jobName)
+    local zone = PolyZone:Create(shopShape, {  -- create the zone
+        name= name,
+        minZ = shopShape.minZ,
+        maxZ = shopShape.maxZ
+    })
     
+    zone:onPlayerInOut(function(isPointInside)
+        if isPointInside then
+            ClosestShop = name
+            insideZones[name] = true
+            CreateThread(function()
+                while insideZones[name] and PlayerData.job.name == Config.Shops[name]['Job'] do
+                    setClosestShowroomVehicle()
+                    vehicleMenu = {
+                        {
+                            isMenuHeader = true,
+                            header = getVehBrand():upper().. ' '..getVehName():upper().. ' - $' ..getVehPrice(),
+                        },
+                        {
+                            header = 'Test Drive',
+                            txt = 'Send the closest citizen for a test drive',
+                            params = {
+                                isServer = true,
+                                event = 'qb-aircraftshop:server:customTestDrive',
+                                args = {
+                                    testVehicle = Config.Shops[ClosestShop]["ShowroomVehicles"][ClosestVehicle].chosenVehicle
+                                }
+                            }
+                        },
+                        {
+                            header = "Sell Vehicle",
+                            txt = 'Sell vehicle to closest citizen',
+                            params = {
+                                isServer = true,
+                                event = 'qb-aircraftshop:server:sellShowroomVehicle',
+                                args = {
+                                    buyVehicle = Config.Shops[ClosestShop]["ShowroomVehicles"][ClosestVehicle].chosenVehicle
+                                }
+                            }
+                        },
+                        {
+                            header = 'Finance Vehicle',
+                            txt = 'Finance vehicle to closest citizen',
+                            params = {
+                                event = 'qb-aircraftshop:client:openCustomFinance',
+                                args = {
+                                    price = getVehPrice(),
+                                    buyVehicle = Config.Shops[ClosestShop]["ShowroomVehicles"][ClosestVehicle].chosenVehicle
+                                }
+                            }
+                        },
+                        {
+                            header = 'Swap Vehicle',
+                            txt = 'Change currently selected vehicle',
+                            params = {
+                                event = 'qb-aircraftshop:client:vehCategories',
+                            }
+                        },
+                    }
+                    Wait(1000)
+                end
+            end)
+        else
+            insideZones[name] = false -- leave the shops zone
+            ClosestShop = nil
+            ClosestVehicle = nil
+        end
+    end)
+end
 
-  }, {
-    name="LAVS",
-    minZ = 4,
-    maxZ = 40
-})
-
-LAVS:onPlayerInOut(function(isPointInside)
-    if isPointInside then
-        ClosestShop = 'LAVS'
-        inLAVS = true
-        CreateThread(function()
-            while inLAVS do
-                setClosestShowroomVehicle()
-                vehicleMenu = {
-                    {
-                        isMenuHeader = true,
-                        header = getVehBrand():upper().. ' '..getVehName():upper().. ' - $' ..getVehPrice(),
-                    },
-                    {
-                        header = 'Test Drive',
-                        txt = 'Send the closest citizen for a test drive',
-                        params = {
-                            isServer = true,
-                            event = 'qb-aircraftshop:server:customTestDrive',
-                            args = {
-                                testVehicle = Config.Shops[ClosestShop]["ShowroomVehicles"][ClosestVehicle].chosenVehicle
-                            }
-                        }
-                    },
-                    {
-                        header = "Sell Aircraft",
-                        txt = 'Sell Aircraft to closest citizen',
-                        params = {
-                            isServer = true,
-                            event = 'qb-aircraftshop:server:sellShowroomVehicle',
-                            args = {
-                                buyVehicle = Config.Shops[ClosestShop]["ShowroomVehicles"][ClosestVehicle].chosenVehicle
-                            }
-                        }
-                    },
-                    {
-                        header = 'Finance Aircraft',
-                        txt = 'Finance Aircraft to closest citizen',
-                        params = {
-                            event = 'qb-aircraftshop:client:openCustomFinance',
-                            args = {
-                                price = getVehPrice(),
-                                buyVehicle = Config.Shops[ClosestShop]["ShowroomVehicles"][ClosestVehicle].chosenVehicle
-                            }
-                        }
-                    },
-                    {
-                        header = 'Swap Aircraft',
-                        txt = 'Change currently selected Aircraft',
-                        params = {
-                            event = 'qb-aircraftshop:client:vehCategories',
-                        }
-                    },
-                }
-                Wait(1000)
-            end
-        end)
-    else
-        inLAVS = false
-        ClosestShop = nil
+for name, shop in pairs(Config.Shops) do 
+    if shop['Type'] == 'free-use' then
+        createFreeUseShop(shop['Zone']['Shape'], name)
+    elseif shop['Type'] == 'managed' then
+        createManagedShop(shop['Zone']['Shape'], name)
     end
-end)
+end
+
 -- Events
 
 RegisterNetEvent('qb-aircraftshop:client:homeMenu', function()
@@ -289,49 +369,14 @@ RegisterNetEvent('qb-aircraftshop:client:TestDrive', function()
         local prevCoords = GetEntityCoords(PlayerPedId())
         QBCore.Functions.SpawnVehicle(Config.Shops[ClosestShop]["ShowroomVehicles"][ClosestVehicle].chosenVehicle, function(veh)
             TaskWarpPedIntoVehicle(PlayerPedId(), veh, -1)
-            exports['LegacyFuel']:SetFuel(veh, 100)
+            exports['cc-fuel']:SetFuel(veh, 100)
             SetVehicleNumberPlateText(veh, 'TESTDRIVE')
             SetEntityAsMissionEntity(veh, true, true)
             SetEntityHeading(veh, Config.Shops[ClosestShop]["VehicleSpawn"].w)
             TriggerEvent('vehiclekeys:client:SetOwner', QBCore.Functions.GetPlate(veh))
             TriggerServerEvent('qb-vehicletuning:server:SaveVehicleProps', QBCore.Functions.GetVehicleProperties(veh))
             testDriveVeh = veh
-            --QBCore.Functions.Notify('You have '..Config.Shops[ClosestShop]["TestDriveTimeLimit"]..' minutes remaining')
-            exports['okokNotify']:Alert("INFO",'You have '..Config.Shops[ClosestShop]["TestDriveTimeLimit"]..' minutes remaining', 5000, 'info')
-            SetTimeout(Config.Shops[ClosestShop]["TestDriveTimeLimit"] * 60000, function()
-                if testDriveVeh ~= 0 then
-                    testDriveVeh = 0
-                    inTestDrive = false
-                    QBCore.Functions.DeleteVehicle(veh)
-                    SetEntityCoords(PlayerPedId(), prevCoords)
-                   -- QBCore.Functions.Notify('Vehicle test drive complete')
-                    exports['okokNotify']:Alert("INFO",'Vehicle test drive complete', 5000, 'info')
-                end
-            end)
-        end, Config.Shops[ClosestShop]["VehicleSpawn"], false)
-        createTestDriveReturn()
-        startTestDriveTimer(Config.Shops[ClosestShop]["TestDriveTimeLimit"] * 60)
-    else
-        --QBCore.Functions.Notify('Already in test drive', 'error')
-        exports['okokNotify']:Alert("ERROR",'Already in test drive', 5000, 'error')
-    end
-end)
-
-RegisterNetEvent('qb-aircraftshop:client:customTestDrive', function(data)
-    if not inTestDrive then
-        inTestDrive = true
-        local vehicle = data.testVehicle
-        local prevCoords = GetEntityCoords(PlayerPedId())
-        QBCore.Functions.SpawnVehicle(vehicle, function(veh)
-            exports['LegacyFuel']:SetFuel(veh, 100)
-            SetVehicleNumberPlateText(veh, 'TESTDRIVE')
-            SetEntityAsMissionEntity(veh, true, true)
-            SetEntityHeading(veh, Config.Shops[ClosestShop]["VehicleSpawn"].w)
-            TriggerEvent('vehiclekeys:client:SetOwner', QBCore.Functions.GetPlate(veh))
-            TriggerServerEvent('qb-vehicletuning:server:SaveVehicleProps', QBCore.Functions.GetVehicleProperties(veh))
-            testDriveVeh = veh
-            --QBCore.Functions.Notify('You have '..Config.Shops[ClosestShop]["TestDriveTimeLimit"]..' minutes remaining')
-            exports['okokNotify']:Alert("INFO",'You have '..Config.Shops[ClosestShop]["TestDriveTimeLimit"]..' minutes remaining', 5000, 'info')
+            QBCore.Functions.Notify('You have '..Config.Shops[ClosestShop]["TestDriveTimeLimit"]..' minutes remaining')
             SetTimeout(Config.Shops[ClosestShop]["TestDriveTimeLimit"] * 60000, function()
                 if testDriveVeh ~= 0 then
                     testDriveVeh = 0
@@ -345,8 +390,38 @@ RegisterNetEvent('qb-aircraftshop:client:customTestDrive', function(data)
         createTestDriveReturn()
         startTestDriveTimer(Config.Shops[ClosestShop]["TestDriveTimeLimit"] * 60)
     else
-        --QBCore.Functions.Notify('Already in test drive', 'error')
-        exports['okokNotify']:Alert("ERROR",'Already in test drive', 5000, 'error')
+        QBCore.Functions.Notify('Already in test drive', 'error')
+    end
+end)
+
+RegisterNetEvent('qb-aircraftshop:client:customTestDrive', function(data)
+    if not inTestDrive then
+        inTestDrive = true
+        local vehicle = data.testVehicle
+        local prevCoords = GetEntityCoords(PlayerPedId())
+        QBCore.Functions.SpawnVehicle(vehicle, function(veh)
+            exports['cc-fuel']:SetFuel(veh, 100)
+            SetVehicleNumberPlateText(veh, 'TESTDRIVE')
+            SetEntityAsMissionEntity(veh, true, true)
+            SetEntityHeading(veh, Config.Shops[ClosestShop]["VehicleSpawn"].w)
+            TriggerEvent('vehiclekeys:client:SetOwner', QBCore.Functions.GetPlate(veh))
+            TriggerServerEvent('qb-vehicletuning:server:SaveVehicleProps', QBCore.Functions.GetVehicleProperties(veh))
+            testDriveVeh = veh
+            QBCore.Functions.Notify('You have '..Config.Shops[ClosestShop]["TestDriveTimeLimit"]..' minutes remaining')
+            SetTimeout(Config.Shops[ClosestShop]["TestDriveTimeLimit"] * 60000, function()
+                if testDriveVeh ~= 0 then
+                    testDriveVeh = 0
+                    inTestDrive = false
+                    QBCore.Functions.DeleteVehicle(veh)
+                    SetEntityCoords(PlayerPedId(), prevCoords)
+                    QBCore.Functions.Notify('Vehicle test drive complete')
+                end
+            end)
+        end, Config.Shops[ClosestShop]["VehicleSpawn"], false)
+        createTestDriveReturn()
+        startTestDriveTimer(Config.Shops[ClosestShop]["TestDriveTimeLimit"] * 60)
+    else
+        QBCore.Functions.Notify('Already in test drive', 'error')
     end
 end)
 
@@ -360,8 +435,7 @@ RegisterNetEvent('qb-aircraftshop:client:TestDriveReturn', function()
         exports['qb-menu']:closeMenu()
         testDriveZone:destroy()
     else
-        --QBCore.Functions.Notify('This is not your test drive vehicle', 'error')
-        exports['okokNotify']:Alert("ERROR",'This is not your test drive vehicle', 5000, 'error')
+        QBCore.Functions.Notify('This is not your test drive vehicle', 'error')
     end
 end)
 
@@ -495,7 +569,7 @@ end)
 RegisterNetEvent('qb-aircraftshop:client:buyShowroomVehicle', function(vehicle, plate)
     QBCore.Functions.SpawnVehicle(vehicle, function(veh)
         TaskWarpPedIntoVehicle(PlayerPedId(), veh, -1)
-        exports['LegacyFuel']:SetFuel(veh, 100)
+        exports['cc-fuel']:SetFuel(veh, 100)
         SetVehicleNumberPlateText(veh, plate)
         SetEntityHeading(veh, Config.Shops[ClosestShop]["VehicleSpawn"].w)
         SetEntityAsMissionEntity(veh, true, true)
@@ -602,15 +676,17 @@ end)
 
 CreateThread(function()
     for k,v in pairs(Config.Shops) do
-        local Dealer = AddBlipForCoord(Config.Shops[k]["Location"])
-        SetBlipSprite (Dealer, 423)
-        SetBlipDisplay(Dealer, 4)
-        SetBlipScale  (Dealer, 0.75)
-        SetBlipAsShortRange(Dealer, true)
-        SetBlipColour(Dealer, 3)
-        BeginTextCommandSetBlipName("STRING")
-        AddTextComponentSubstringPlayerName(Config.Shops[k]["ShopLabel"])
-        EndTextCommandSetBlipName(Dealer)
+        if v.showBlip then
+	    local Dealer = AddBlipForCoord(Config.Shops[k]["Location"])
+	    SetBlipSprite (Dealer, 307)
+            SetBlipDisplay(Dealer, 4)
+            SetBlipScale  (Dealer, 0.75)
+	    SetBlipAsShortRange(Dealer, true)
+	    SetBlipColour(Dealer, 3)
+            BeginTextCommandSetBlipName("STRING")
+	    AddTextComponentSubstringPlayerName(Config.Shops[k]["ShopLabel"])
+	    EndTextCommandSetBlipName(Dealer)
+	end
     end
 end)
 
