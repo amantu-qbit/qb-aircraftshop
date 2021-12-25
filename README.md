@@ -1,39 +1,5 @@
 # qb-aircraftshop
 
-**Test Drives:**
-* Configurable time
-* Returns player once time is up
-* Can't take out more than one vehicle
-
-**Financing:**
-* Configurable down payment
-* Configurable maximum payments
-* Configurable commission amount for private dealerships
-* Checks for payments due on player join and updates times on player logout or quit
-
-**Shops:**
-* Lock to a specific job
-* Commission paid to sales person for private dealer
-* Create as many as desired with easy polyzone creation
-* Vehicle sale amount gets deposited into the cardealer society fund for private dealer
-
-**Planned Updates**
-* QB-Phone support to make payments
-
-**Preview header when near a vehicle at the public dealership:**
-
-![image](https://user-images.githubusercontent.com/57848836/138773379-836be2a6-a800-47a4-8037-84d9052a964c.png)
-
-**After pressing the focus key and selecting the preview header (default: LEFT ALT)**
-
-![image](https://user-images.githubusercontent.com/57848836/138770886-15e056db-3e57-43ea-b855-3ef4fd107acf.png)
-
-**Configurable test drive times that automatically return the player**
-![20211025160757_1](https://user-images.githubusercontent.com/57848836/138771162-00ee2607-0b56-418b-848c-5d8a009f4acd.jpg)
-
-**Vehicle purchasing**
-![20211025160853_1](https://user-images.githubusercontent.com/57848836/138772385-ce16c0e6-baea-4b54-8eff-dbf44c54f568.jpg)
-
 **Private job-based dealership menu (works off closest player)**
 
 ![image](https://user-images.githubusercontent.com/57848836/138772120-9513fa09-a22f-4a5f-8afe-6dc7756999f4.png)
